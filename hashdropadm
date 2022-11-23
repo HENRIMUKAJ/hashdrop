@@ -1,0 +1,842 @@
+#!/usr/bin/php
+<?php
+    require 'config.php';
+    require 'CommonlyUsedFunc.php';
+    //error_reporting(-1);
+    //ini_set('display_errors', 'On');
+
+    function main(){
+        global $baseDir1;
+        global $database_name;
+
+        if(!(is_writeable("data/".$database_name) || is_readable("data/".$database_name))){
+            echo "Database is not writable or readable this will break page functionality please fix permissions!";
+            ErrorLog("Database is not writable or readable this will break page functionality please fix permissions!");
+            return false;
+        }
+
+        $errors=0;
+        $options = getopt("h::p:u:l::P:U:m:e:i::d::a:s:E::n:r:");
+        $filename=basename($_SERVER['PHP_SELF']);
+        switch($options){
+            default:
+                echo "Options inputted are invalid press -h for help.\n";
+                exit(1);
+            case isset($options["h"]):
+                echo "-h Help option.\n-p Specify a profile using the profile name.\n-u Specify a user using their username.\n-s Specify secondary profiles field in user.\n";
+                echo "-l List all users and profile.\n-P Adds a profile to the database (-P can be used in combo with -m and -e).\n";
+                echo "-U Adds a user to the database.Username must be supplied after the -U.\n";
+                echo "-m Specify the default message for a profile.\n";
+                echo "-e Specify expiration date for a profile.Must be a number and the number will represent day(s).\n-r User all file(s) will be reassigned to.\n";
+                echo "-i Gives profile or user information needs to be used in combination with -p and -u\n-E Is used to edit users and profiles.";
+                echo "\n-d deletes profile or user needs to be used in combination with -p and -u.\n-a Append profile(s) to user.Used in combination with -u.\n-n Used to specify the new username or profile name during edit.\n";
+                echo "\nEXAMPLES:\nDeleting Profile: ".$filename." -d -p profile name\nDeleting User: ".$filename." -d -u username\nDeleting secondary profile from user:".$filename." -d -s profile name -u username.\nAdding User: ".$filename." -U username\nAdding Profile: ".$filename." -P profile -m message -e Expiration In day(s).\n";
+                echo "List: ".$filename." -l.\nInfo Profile: ".$filename." -i -p profile name\nInfo User: ".$filename." -i -u username.\nAssign profile to user: ".$filename." -p profile name -u username.\nAppend Profile: ".$filename." -a profile name -u username.\n";
+                echo "Edit Profile: ".$filename." -E -p profile name -n new profile name -e new expiration time -m new message(not all switches need to be used just the fields you want to edit!)\nEdit User: ".$filename." -E -u username -n new username \nReassign files from one user to other: ".$filename." -r username(new file owner) -u username(old file owner)\n";
+                break;
+            case isset($options["p"]) && isset($options["u"]):
+                if(checkProfileByName($options["p"]) != 0 ){
+                    echo "profile found \n";
+                }else{
+                    echo "Profile does not exist \n";
+                    $errors+=1;
+                }
+                if(checkUser($options["u"]) != 0 ){
+                    echo "user found \n";
+                }else{
+                    echo "user does not exist \n";
+                    $errors+=1;
+                }
+                $profId1=getProfIdByName($options["p"]);
+                if($profId1===false){
+                    echo "Profile ID could not be retrieved";
+                    exit(1);
+                }
+                if(!checkSecondaryProf($options["u"],$profId1)){
+                    echo "The profile you are trying to assign already exist as a secondary profile.\n";
+                    exit(1);
+                }
+                if($errors>0){
+                    return exit($errors);
+                }
+                if(AssignUsertoProf($options["p"],$options["u"])){
+                    exit(0);
+                }
+                else {
+                    echo "Profile could not be assigned to user.\n";
+                    exit(1);
+                }
+            case isset($options["l"]):
+                if(GetCurUsers() && GetProfiles()){
+                    exit(0);
+                }
+                else{
+                    Echo "Users and Profiles could not be retrieved\n";
+                    exit(1);
+                }
+            case isset($options["P"]):
+                $profileName=$options["P"];
+                if(!isset($options["m"])) {
+                    $message = readline("Enter message for profile: ");
+                }else{
+                    $message = $options["m"];
+                }
+                if($message == null){
+                    echo "message field must be filled out can't be left blank\n";
+                    exit(1);
+                }
+                if(!isset($options["e"])) {
+                    $defaultExpTime = readline("Enter default expiration time(In days): ");
+                    $defaultExpTime =intval($defaultExpTime);
+                }else{
+                    $defaultExpTime=intval($options["e"]);
+                }
+                if(!(preg_match("/[0-9]+/",$defaultExpTime) && ($defaultExpTime < 366 && $defaultExpTime > 0 ))){
+                    echo "Expiration time must be a number and be less than or equal to 365 and greater than 0\n";
+                    exit(1);
+                }
+                $baseDir=$baseDir1."/".$profileName;
+                if(checkProfileByName($profileName) !=0){
+                    echo "profile with name: ".$profileName." already exist\n";
+                    exit(1);
+                }
+                if(file_exists($baseDir)){
+                    echo $baseDir;
+                    echo "Directory already exist!";
+                    exit(1);
+                }else {
+                    mkdir($baseDir);
+                }
+                if(!AddProfile($profileName,$message,intval($defaultExpTime),$baseDir)){
+                    echo "failed to add a profile\n";
+                    exit(1);
+                }
+                break;
+            case isset($options["U"]):
+                $usr = $options["U"];
+                if(LdapValUser($usr)) {
+                    $email = LdapUserEmail($usr);
+                    if(checkUser($usr) !=0 ) {
+                        echo "User already exist can't be added\n";
+                        exit(1);
+                    }
+                    if(!isset($email)){
+                        echo "User email could not be retrieved from ldap";
+                        exit(1);
+                    }
+                    if (!AddUser($usr,$email)) {
+                        echo "failed to add user\n";
+                        exit(1);
+                    }else{
+                        exit(0);
+                    }
+                }else{
+                    echo "User could not be found in AD\n";
+                    exit(1);
+                }
+            case isset($options["i"]) && isset($options["u"]):
+                $usr=$options["u"];
+                if(checkUser($usr) !=0){
+                    $user=GetSpecUser($usr);
+                    if($user !== false){
+                        foreach($user as $userinfo){
+                            $profname=getProfNameById($userinfo["profileId"]);
+                            echo "Username: ".$userinfo["username"]."\n";
+                            echo "Primary Profile: ".$profname."\n";
+                            $SecondaryIdString=ConvertIdToString($userinfo["secondaryProfiles"]);
+                            echo "Secondary Profile(s): ".$SecondaryIdString."\n";
+                        }
+                    }
+                    else{
+                        echo "User information could not be retrieved!\n";
+                        exit(1);
+                    }
+                }else{
+                    echo "user you are trying to get does not exist.\n";
+                    exit(1);
+                }
+                break;
+            case isset($options["i"]) && isset($options["p"]):
+                $prof=$options["p"];
+                if(checkProfileByName($prof) !=0){
+                    if(GetSpecProf($prof)){
+                        exit(0);
+                    }
+                }else{
+                    echo "Profile you are trying to get does not exist.\n";
+                    exit(1);
+                }
+                break;
+            case isset($options["d"]) && isset($options["p"]):
+                $prof=$options["p"];
+                $profId=getProfIdByName($prof);
+                $usrsToEdit=getUsrContainingProf($profId);
+
+                if(checkProfileByName($prof) ==0){
+                    echo "Profile you are trying to delete does not exist.\n";
+                    exit(1);
+                }
+
+                if($profId !== null) {
+                    if($usrsToEdit !== false){
+                        foreach ($usrsToEdit as $row){
+                            $newSecondaryProf=getNewSecondaryProf($row["username"],$prof);
+                            if($newSecondaryProf === false){
+                                echo "Secondary profile could not be reconstructed\n";
+                                exit(1);
+                            }
+                            if(!EditSecProfData($row["username"],$newSecondaryProf)){
+                                echo "Secondary Profile could not be deleted from user\n";
+                                exit(1);
+                            }
+                        }
+                    }
+                    else{
+                        echo "Users potentially containing the specified profile could not be retrieved\n";
+                        exit(1);
+                    }
+                }
+                elseif ($profId === false){
+                    echo "Profile Id could not be retrieved\n";
+                    exit(1);
+                }
+                else{
+                    echo "Profile Id came back null\n";
+                    exit(1);
+                }
+
+
+                if(UpdateBasedOnDelProf($profId)){
+                    $dirDel=getProfileDir($prof);
+                    if($dirDel != null){
+                        if(file_exists($dirDel) === false){
+                            echo "$dirDel does not exist!";
+                            exit(1);
+                        }
+                        if(rmdir($dirDel)){
+                            if(deleteSpecProf($prof)){
+                                exit(0);
+                            }
+                        }
+                        else{
+                            if(count(scandir($dirDel)) >2){
+                                echo "files present in directory -> ".$dirDel."\n";
+                                exit(1);
+                            }
+                            echo "$dirDel"." could not be deleted.\n";
+                            exit(1);
+                        }
+                    }
+                    else{
+                        echo "Delete directory could not be found.\n";
+                        exit(1);
+                    }
+                }
+                else{
+                    echo "Specified profile could not be deleted out of users primary profile.\n";
+                    exit(1);
+                }
+                break;
+            case isset($options["d"]) && isset($options["u"]) && count($options) == 2:
+                $usr=$options["u"];
+                if(checkUser($usr) ==0){
+                    echo "User you are trying to delete does not exist.\n";
+                    exit(1);
+                }
+                $usrId=GetUserId($usr);
+                if(empty($usrId)){
+                    echo "User Id could not be retrived.\n";
+                }
+                if(CheckForFiles($usrId[0]["userId"])!=0){
+                    echo "User has files that belong to them they cannot be deleted reassign those files.\n";
+                    exit(1);
+                }
+
+                if(deleteSpecUser($usr)){
+                    exit(0);
+                }
+                else{
+                    echo "Could not delete user.\n";
+                    exit(1);
+                }
+            case isset($options["a"]) && isset($options["u"]):
+                if(checkProfileByName($options["a"]) ==0 ){
+                    echo "profile you are trying to append does not exist\n";
+                    exit(1);
+                }
+                if(checkUser($options["u"]) == 0)
+                {
+                    echo "user you are trying to append does not exist\n";
+                    exit(1);
+                }
+                $getProfId=getProfIdByName($options["a"]);
+                $usrCurProf=checkUsrProf($options["u"]);
+                if($usrCurProf == $getProfId){
+                    echo "The primary profile already has the secondary profile you are trying to add\n";
+                    exit(1);
+                }
+                elseif($usrCurProf == null){
+                    echo "Users primary profile must be set before adding secondary profiles.\n";
+                    exit(1);
+                }
+                if($getProfId !=null){
+                    if(checkSecondaryProf($options["u"],$getProfId)){
+                        if(AppendProf($getProfId,$options["u"])){
+                            exit(0);
+                        }
+                        else
+                        {
+                            echo "Profile could not be appended!\n";
+                            exit(1);
+                        }
+                    }
+                    else{
+                        echo "Profile you are trying to add is duplicate\n";
+                        exit(1);
+                    }
+                }
+                else{
+                    exit(1);
+                }
+            case isset($options["d"]) && isset($options["s"]) && isset($options["u"]):
+                if (checkUser($options["u"]) == 0 ){
+                    echo "User you entered does not exist\n";
+                    exit(1);
+                }
+                if(checkProfileByName($options["s"]) == 0 ){
+                    echo "Profile you entered does not exist\n";
+                    exit(1);
+                }
+                $newSecondaryProf=getNewSecondaryProf($options["u"],$options["s"]);
+                if($newSecondaryProf === false){
+                    exit(1);
+                }
+                if(EditSecProfData($options["u"],$newSecondaryProf)){
+                   exit(0);
+               }
+               else {
+                   echo "Secondary Profile could not be deleted\n";
+                   exit(1);
+               }
+            case isset($options["E"]) && isset($options["p"]):
+                if(checkProfileByName($options["p"]) == 0){
+                    echo "Profile you entered does not exist\n";
+                    exit(1);
+                }
+                $curProfValues=RetriveOldValuesProf($options["p"]);
+                if($curProfValues === false){
+                    echo "Current values of profile could not be retrieve.\n";
+                    exit(1);
+                }
+
+                if(!isset($options["e"])){
+                    $newProfExp=intval($curProfValues[0]["defaultExpTime"]);
+                }
+                else{
+                    if(!(preg_match("/[0-9]+/",$options["e"]) && ($options["e"] <= 100 && $options["e"] > 0 ))){
+                        echo "Expiration time must be a number and be less than 101 and greater than 0.\n";
+                        exit(1);
+                    }
+                    $newProfExp=intval($options["e"]);
+                }
+
+                if(!isset($options["m"])){
+                    $newProfMesg=$curProfValues[0]["message"];
+                }
+                else{
+                    $newProfMesg=$options["m"];
+                }
+                if(!isset($options["n"])){
+                    $newProfName=$curProfValues[0]["profName"];
+                }
+                else
+                {
+                    if(checkProfileByName($options["n"]) !=0){
+                        echo "Another profile with name ".$options["n"]." already exist cant rename this profile.\n";
+                        exit(1);
+                    }
+                    $newProfName=$options["n"];
+                }
+                $newDir=$baseDir1."/".$newProfName;
+                $curDir=$curProfValues[0]['baseUpDir'];
+
+                if(!file_exists($curDir)){
+                    echo "Directory you are trying to rename does not exist: ".$curDir."\n";
+                    exit(1);
+                }
+
+                if(rename("$curDir","$newDir")) {
+                    if (EditProfile($options["p"], $newProfExp, $newProfMesg, $newProfName,$newDir)) {
+                        exit(0);
+                    } else {
+                        echo "Profile could not be edited.\n";
+                        exit(1);
+                    }
+                }
+                else{
+                    echo "Profile Directory could not be renamed.\n";
+                    exit(1);
+                }
+            case isset($options["E"]) && isset($options["u"]):
+                if(checkUser($options["u"]) == 0){
+                    echo "User you are trying to edit does not exist.\n";
+                    exit(1);
+                }
+                if(isset($options["n"])){
+                    if (!LdapValUser($options["n"])) {
+                        echo "New username could not be found in AD.\n";
+                        exit(1);
+                    }
+                    if(EditUser($options["u"],$options["n"])){
+                        exit(0);
+                    }
+                    else{
+                        echo "User could not be edited.\n";
+                        exit(1);
+                    }
+                }
+                else {
+                    echo "Nothing was specified for edit.\n";
+                    exit(1);
+                }
+            case isset($options["r"]) && isset($options["u"]):
+                if(checkUser($options["r"]) == 0){
+                    echo "User you are trying to reassign files to does not exist\n";
+                    exit(1);
+                }
+                if(checkUser($options["u"]) == 0){
+                    echo "User you are trying to remove files from does not exist\n";
+                }
+                $curOwnerId = GetUserId($options["u"]);
+                $newOwnerId = GetUserId($options["r"]);
+                if(empty($curOwnerId)){
+                    echo "Could not user id for ".$options["u"]."\n";
+                    exit(1);
+                }
+                elseif(empty($newOwnerId)){
+                    echo "Could not user id for ".$options["r"]."\n";
+                    exit(1);
+                }
+                if(CheckForFiles($curOwnerId[0]["userId"]) == 0 ){
+                    echo "User you are trying to reassign files from does not have any file(s).\n";
+                    exit(1);
+                }
+                if(ReassignFiles($newOwnerId[0]["userId"],$curOwnerId[0]["userId"])){
+                    echo "File(s) have been reassigned\n";
+                    exit(0);
+                }
+                else{
+                    echo "file(s) could not be reassigned\n";
+                    exit(1);
+                }
+        }
+    }
+
+    function ReassignFiles($newOwner,$oldOwner){
+        global $hashDropDb;
+        global $fileTableName;
+
+        $updateFiles=$hashDropDb->prepare("update $fileTableName set uploadUserID=:newFileOwner where uploadUserID=:curUser;");
+        $updateFiles->bindParam(":newFileOwner",$newOwner);
+        $updateFiles->bindParam(":curUser",$oldOwner);
+        if($updateFiles->execute()){
+            return true;
+        }
+        return false;
+    }
+
+//    function ConvertIdToString($secondaryId){
+//        $recombNameString=array();
+//        $secondaryId=explode(",",$secondaryId);
+//        for($count = 0;$count<count($secondaryId);$count++){
+//            $recombNameString[$count]=getProfNameById($secondaryId[$count]);
+//        }
+//        return implode(",",$recombNameString);
+//    }
+
+    function getUsrContainingProf($profId){
+        global $hashDropDb;
+        global $userTableName;
+
+        $selectStmt=$hashDropDb->prepare("select username from $userTableName where instr(secondaryProfiles,:profId)>0;");
+        $selectStmt->bindParam(":profId",$profId);
+        if($selectStmt->execute()){
+
+            return $selectStmt->fetchAll();
+        }
+        return false;
+    }
+
+    function EditUser($curUserName,$newUser){
+        global $hashDropDb;
+        global $userTableName;
+
+        $editStmt=$hashDropDb->prepare("update $userTableName set username=:usr where username=:newuser;");
+        $editStmt->bindParam(":usr",$newUser);
+        $editStmt->bindParam(":newuser",$curUserName);
+        if($editStmt->execute()){
+            return true;
+        }
+        return false;
+    }
+
+    function EditProfile($profile,$exp,$msg,$profileName,$dir){
+        global $hashDropDb;
+        global $profileTableName;
+
+        $editStmt=$hashDropDb->prepare("update $profileTableName set profName=:profName,message=:msg,defaultExpTime=:exp,baseUpDir=:dir where profName=:prof;");
+        $editStmt->bindParam(":prof",$profile);
+        $editStmt->bindParam(":profName",$profileName);
+        $editStmt->bindParam(":exp",$exp);
+        $editStmt->bindParam(":msg",$msg);
+        $editStmt->bindParam(":dir",$dir);
+        if($editStmt->execute()){
+            return true;
+        }
+        return false;
+    }
+
+    function RetriveOldValuesProf($prof){
+        global $hashDropDb;
+        global $profileTableName;
+
+        $selectStmt=$hashDropDb->prepare("select * from $profileTableName where profName=:prof;");
+        $selectStmt->bindParam(":prof",$prof);
+        if($selectStmt->execute()){
+            $stmtResult=$selectStmt->fetchAll();
+            return $stmtResult;
+        }
+        return false;
+    }
+
+    function EditSecProfData($usr,$secondaryProf){
+        global $hashDropDb;
+        global $userTableName;
+
+        $editStmt = $hashDropDb->prepare("UPDATE $userTableName SET secondaryProfiles =:secondaryProf WHERE username=:username;");
+        $editStmt->bindParam(":secondaryProf",$secondaryProf);
+        $editStmt->bindParam(":username",$usr);
+        if($editStmt->execute()){
+            return true;
+        }
+        return false;
+    }
+
+    function getNewSecondaryProf($usr,$secondaryProf){
+
+        $result = GetSecProf($usr);
+        $resultOfExp=explode(",",$result);
+        $secProfId=getProfIdByName($secondaryProf);
+        if($result == null){
+            echo "Secondary profile you are trying to delete is not currently assigned to this user.\n";
+            return false;
+        }
+        if($secProfId == null){
+            echo "New Secondary Profile string could not be formed.\n";
+            return false;
+        }
+        foreach ($resultOfExp as $secId){
+            if($secId == $secProfId){
+                $delIndex=array_search($secId,$resultOfExp);
+                unset($resultOfExp[$delIndex]);
+            }
+        }
+        return implode(",",$resultOfExp);
+    }
+
+
+    function getProfileDir($prof){
+        global $profileTableName;
+        global $hashDropDb;
+
+        $selectStmt=$hashDropDb->prepare("SELECT baseUpDir FROM $profileTableName WHERE profName =:prof;");
+        $selectStmt->bindParam(":prof",$prof);
+        if($selectStmt->execute()){
+            foreach ($selectStmt as $row) {
+                return $row["baseUpDir"];
+            }
+        }
+        return false;
+    }
+
+    function AppendProf($profId,$usr){
+        global $hashDropDb;
+        global $userTableName;
+        echo GetSecProf($usr);
+        if(GetSecProf($usr) == null )
+        {
+            $updateUser = $hashDropDb->prepare("UPDATE $userTableName SET secondaryProfiles = :newId where username =:usr;");
+            $updateUser->bindParam(":newId", $profId);
+            $updateUser->bindParam(":usr", $usr);
+            if ($updateUser->execute()) {
+                return true;
+            }
+            return false;
+        }
+        else
+        {
+            $updateUser = $hashDropDb->prepare("UPDATE $userTableName SET secondaryProfiles = secondaryProfiles||','||:newId where username =:usr;");
+            $updateUser->bindParam(":newId", $profId);
+            $updateUser->bindParam(":usr", $usr);
+            if ($updateUser->execute()) {
+                return true;
+            }
+            return false;
+        }
+    }
+
+    function AddUser($username,$email){
+        global $hashDropDb;
+        global $userTableName;
+
+        $addUser=$hashDropDb->prepare("INSERT INTO $userTableName (username,email) VALUES (:username,:email);");
+        $addUser->bindParam(":username",$username);
+        $addUser->bindParam(":email",$email);
+        if($addUser->execute()){
+            return true;
+        }
+        else{
+            return false;
+        }
+    }
+
+    function AssignUsertoProf($profName,$user){
+        global $hashDropDb;
+        global $userTableName;
+
+        $profId=getProfIdByName($profName);
+        if(!$profId){
+            return false;
+        }
+        $editUser=$hashDropDb->prepare("UPDATE $userTableName SET profileId= :profId WHERE username= :user;");
+        $editUser->bindParam(":profId",$profId);
+        $editUser->bindParam(":user",$user);
+        if($editUser->execute()){
+            return true;
+        }
+        else{
+            return false;
+        }
+    }
+
+    function AddProfile($profName,$msg,$defExpTime,$baseDir){
+        global $hashDropDb;
+        global $profileTableName;
+
+        $addProfile=$hashDropDb->prepare("INSERT INTO $profileTableName (baseUpDir,message,defaultExpTime,profName) VALUES (:baseDir,:message,:defaultExpTime,:profName);");
+        $addProfile->bindParam(":baseDir",$baseDir);
+        $addProfile->bindParam(":message",$msg);
+        $addProfile->bindParam(":profName",$profName);
+        $addProfile->bindParam(":defaultExpTime",$defExpTime);
+        if($addProfile->execute()){
+            return true;
+        }
+        else{
+            return false;
+        }
+    }
+
+    function GetUserId($usr){
+        global $hashDropDb;
+        global $userTableName;
+
+        $getUsrId=$hashDropDb->prepare("select userId from $userTableName where username = :usr;");
+        $getUsrId->bindParam(":usr",$usr);
+        if($getUsrId->execute()){
+            return $getUsrId->fetchAll();
+        }
+        return false;
+    }
+
+    function GetSpecUser($usr){
+        global $hashDropDb;
+        global $userTableName;
+
+        $getUser=$hashDropDb->prepare("SELECT * From $userTableName WHERE username = :usr;");
+        $getUser->bindParam(":usr",$usr);
+        if($getUser->execute()){
+            return $getUser->fetchAll();
+        }
+        return false;
+    }
+
+function GetSpecProf($prof){
+    global $hashDropDb;
+    global $profileTableName;
+
+    $getProf=$hashDropDb->prepare("SELECT * From $profileTableName WHERE profName = :prof;");
+    $getProf->bindParam(":prof",$prof);
+    if($getProf->execute()){
+
+        foreach($getProf as $profRow){
+            echo "Profile ID: ".$profRow["profileId"]." "."Profile Name: ".$profRow["profName"]." "."Profile Path: ".$profRow["baseUpDir"]." "."Profile Expiration Time(Days): ".$profRow["defaultExpTime"]." "."Profile Message: ".$profRow["message"]."\n";
+        }
+        return true;
+    }
+    return  false;
+}
+    function CheckForFiles($usrId){
+        global $hashDropDb;
+        global $fileTableName;
+
+        $getFileId=$hashDropDb->prepare("Select fileId,profileID,fileName from $fileTableName where uploadUserID=:usr and deleted=0;");
+        $getFileId->bindParam(":usr",$usrId);
+        if($getFileId->execute()){
+            $resultOfStmt=$getFileId->fetchAll();
+            fileInfo($resultOfStmt);
+            return count($resultOfStmt);
+        }
+        return false;
+    }
+
+    function fileInfo($fileInfoArr)
+    {
+        foreach ($fileInfoArr as $fileAtr)
+        {
+            echo "File Name: ".$fileAtr["fileName"]." Belonging to profile: ".getProfNameById($fileAtr["profileID"])."\n";
+        }
+    }
+
+    function GetCurUsers(){
+        global $hashDropDb;
+        global $userTableName;
+
+        $getUser=$hashDropDb->prepare("SELECT username From $userTableName;");
+        if($getUser->execute()){
+            echo "Users\n";
+            foreach($getUser as $userRow){
+                echo "User Name: ".$userRow["username"]."\n";
+            }
+            return true;
+        }
+        return  false;
+    }
+
+    function GetProfiles(){
+        global $hashDropDb;
+        global $profileTableName;
+
+        $getProf=$hashDropDb->prepare("SELECT profName,profileId From $profileTableName;");
+        if($getProf->execute()){
+            echo "\n";
+            echo "Profiles\n";
+            foreach($getProf as $profileRow){
+                echo "ID: ".$profileRow["profileId"]."|"."Prof Name : ".$profileRow["profName"]."\n";
+            }
+            return true;
+        }
+        return false;
+    }
+
+//    function checkProfileByName($profileName){
+//        global $hashDropDb;
+//        global $profileTableName;
+//
+//        $checkStmt=$hashDropDb->prepare("SELECT profName FROM $profileTableName WHERE profName =:profileName;");
+//        $checkStmt->bindParam(":profileName",$profileName);
+//        if($checkStmt->execute()){
+//            $resultOfStmt=$checkStmt->fetchAll();
+//            return count($resultOfStmt);
+//        }
+//        return false;
+//    }
+
+    function deleteSpecUser($usr){
+        global $hashDropDb;
+        global $userTableName;
+
+        $delStmt = $hashDropDb->prepare("DELETE FROM $userTableName WHERE username= :usr;");
+        $delStmt->bindParam(":usr",$usr);
+        if($delStmt->execute()){
+            return true;
+        }
+        return false;
+    }
+
+//    function getProfNameById($profId){
+//        global $hashDropDb;
+//        global $profileTableName;
+//
+//        $selectStmt = $hashDropDb->prepare("Select profName from $profileTableName where profileId=:profId;");
+//        $selectStmt->bindParam(":profId",$profId);
+//        if($selectStmt->execute()){
+//            $result=$selectStmt->fetchAll();
+//            if(empty($result)){
+//                return "";
+//            }
+//            return $result[0]["profName"];
+//        }
+//        return false;
+//    }
+
+//    function getProfIdByName($profName){
+//        global $hashDropDb;
+//        global $profileTableName;
+//
+//        $selectStmt = $hashDropDb->prepare("Select profileId from $profileTableName where profName = :profName;");
+//        $selectStmt ->bindParam(":profName",$profName);
+//        if($selectStmt->execute()){
+//            foreach ($selectStmt as $row){
+//                return $row["profileId"];
+//            }
+//        }
+//        return false;
+//    }
+
+    function UpdateBasedOnDelProf($prof){
+        global $hashDropDb;
+        global $userTableName;
+
+        $updateStmt = $hashDropDb->prepare("UPDATE $userTableName SET ProfileId = NULL Where profileId = :prof;");
+        $updateStmt->bindParam(":prof",$prof);
+        if($updateStmt->execute()){
+            return true;
+        }
+        return false;
+    }
+
+    function deleteSpecProf($prof){
+        global $hashDropDb;
+        global $profileTableName;
+        $delStmt = $hashDropDb->prepare("DELETE FROM $profileTableName WHERE profName= :prof;");
+        $delStmt->bindParam(":prof",$prof);
+        if($delStmt->execute()){
+            return true;
+        }
+        return false;
+    }
+
+    function checkUser($userName){
+        global $hashDropDb;
+        global $userTableName;
+
+        $checkStmt=$hashDropDb->prepare("SELECT username FROM $userTableName WHERE username =:UserName;");
+        $checkStmt->bindParam(":UserName",$userName);
+        if($checkStmt->execute()){
+            $resultOfStmt=$checkStmt->fetchAll();
+            return count($resultOfStmt);
+        }
+        return false;
+    }
+
+    function LdapValUser($user){
+        $ldapConn= ldap_connect("");
+        $ldapBind = ldap_bind($ldapConn,"","");
+        $attrForLdap=array("samAccountName");
+        $ldapSearchResult=ldap_search($ldapConn,"OU=User_Accounts,DC=jaxport,dc=com","samAccountName={$user}", $attrForLdap);
+        $info = ldap_get_entries($ldapConn, $ldapSearchResult);
+        if($info["count"] == 0){
+            return false;
+        }
+        elseif($info[0]["samaccountname"][0] == $user){
+            return true;
+        }
+        else{
+           return false;
+        }
+    }
+
+
+
+    main()
+?>

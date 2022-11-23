@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name='viewport' contenet='width=device-width, initial-scale=1, user-scalable=yes'>
+  <link rel='stylesheet' href='css/LoginPage.css'>
+  <link rel="stylesheet" href="resources/bootstrap/css/bootstrap.min.css">
+  <script src="resources/bootstrap/js/bootstrap.min.js"></script>
+  <script src='resources/jquery/jquery.js'></script>
+  <script src='js/LoginPageScript.js'></script>
+  <title>Hash Drop</title>
+</head>
+<body>
+<div id="super_container">
+  <div id="jaxport_logo_container">
+    <img src='image/jaxport-logo-600px.png' alt='jaxport logo' width="300" height="125">
+  </div>
+  <div id="title_container">
+    <h1 id="logon_header">Hash Drop</h1>
+  </div>
+  <div id='form_container'>
+    <form id="logon_form" action='logon.php' method="POST">
+      <!-- <div id='login_message_container'>
+          <p id="login_message"><?= $message ?></p>
+      </div> -->
+      <?php echo $message ?>
+      <div class='logon_container' id="username_container">
+        <table id="username_table" class="logon_table">
+          <tr class='label_row' id='label_row1'>
+            <td>
+              <label for="username_input" class="logon_label" id="username_label">Username</label>
+            </td>
+          </tr>
+          <tr id='input_row1'>
+            <td>
+              <input type="text" class="logon_input" id="username_input" name="username_input" placeholder="Username"
+                     onfocus="ShowLabel(id,'username_label', 'label_row1', 'username_container')"
+                     onfocusout="HideLabel(id, 'username_label', 'label_row1', 'username_container')"
+                     oninput="DarkenButton(id)">
+            </td>
+          </tr>
+        </table>
+      </div>
+      <br>
+      <div class='logon_container' id="password_container">
+        <table id="password_table" class="logon_table">
+          <tr class='label_row' id='label_row2'>
+            <td>
+              <label for="password_input" class="logon_label" id="password_label">Password</label>
+            </td>
+          </tr>
+          <tr id='input_row2'>
+            <td>
+              <input type="password" class="logon_input" id="password_input" name="password_input" placeholder="Password"
+                     onfocus="ShowLabel(id, 'password_label', 'label_row2', 'password_container')"
+                     onfocusout="HideLabel(id, 'password_label', 'label_row2', 'password_container')"
+                     oninput="DarkenButton(id)">
+            </td>
+          </tr>
+        </table>
+      </div>
+      <div id='btn_container'>
+        <input type="hidden" name="action" value="login" />
+        <button type="submit" id="logon_btn">Log in</button>
+      </div>
+    </form>
+  </div>
+</div>
+</body>
+</html>

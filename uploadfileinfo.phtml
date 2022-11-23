@@ -1,0 +1,73 @@
+<?php
+require 'config.php';
+if(session_status()!=2) {
+    session_start();
+}
+Authenticate();
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <link rel="stylesheet" href="css/site.css">
+    <script defer src="js/site.js"></script>
+    <title>Hash Drop</title>
+</head>
+<body>
+<ul>
+    <li><a href="index.php">Hash Drop</a></li>
+    <li><a href="uploadfileinfo.phtml">Upload Form</a></li>
+    <li><a>Hi,<?= $_SESSION["firstName"]; ?></a></li>
+    <li><a href="index.php?LogOff">Log Out</a></li>
+</ul>
+<div class="formdiv">
+<form action="FormValidation.php" method="POST">
+    <div><h1><?php
+            require_once 'CommonlyUsedFunc.php';
+            if(isset($_SESSION['uploadProf'])) {
+                echo getProfNameById($_SESSION['uploadProf']);
+            }else{
+                echo "No Profile ID Found";
+            }
+            ?></h1></div>
+    <div id="replace">
+    <label for="timetildel">Day(s) Until Expiration</label>
+        <select name="timetildel" class="inputField" id="timetildel">
+            <?php
+            require_once 'CommonlyUsedFunc.php';
+            $expDate=getDefaultTime($_SESSION['uploadProf']);
+            if($expDate != null){
+                echo '<option value="'.$expDate.'">'.$expDate ." Days (default time)".'</option>';
+            }
+            ?>
+            <option value="1">1 Day</option>
+            <option value="7">1 Week</option>
+            <option value="30">1 Month</option>
+            <option value="365">1 Year</option>
+            <option value="Custom Input">Custom Input</option>
+        </select>
+        <img  hidden id="svgImage" class="imageAlign" src="image/list.svg" alt="go back to drop down">
+        <br><span class="dangerText timeError"></span>
+    </div>
+    <div>
+    <label>Recipient Email(s)
+    <input class="inputField" type="text" name="receiverEmail" id="receiverEmail" placeholder="you can use &#34,&#34 to send to the file multiple users! example@example.com,example@example.com">
+    <br><span class="dangerText emailError"></span>
+    </label>
+    </div>
+    <div>
+    <label>File Description
+        <br><em>**This description will be sent to the email recipient**</em>
+        <textarea  class="inputField" name="fileDescription" id="fileDescription" ></textarea>
+    </label>
+     <br><span class="dangerText descError"></span>
+    </div>
+    <input type="submit" name="insertInfo" id="insertInfo" value="Next"/>
+    </div>
+<footer>
+    <p id="AvalSize"></p>
+</footer>
+</form>
+</body>
+</html>

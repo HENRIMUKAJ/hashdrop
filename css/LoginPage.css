@@ -1,0 +1,132 @@
+/* logon page -----------------------------------------------------------------------------------------------------------------------------*/
+#super_container
+{ 
+    padding-top: 10px;
+    border: 0px solid blue;
+    display: block;
+}
+
+#jaxport_logo_container
+{
+    padding-top: 20px;
+    display: flex;
+    justify-content: center;
+}
+
+#title_container
+{
+    margin-top: 10px;
+    display: flex;
+    justify-content: center;
+}
+
+#login_message_container
+{
+    padding: 5px;
+    display: flex;
+    justify-content: center;
+    width: 320px;
+    height: 50px;
+    background-color: rgba(235, 77, 77, 0.39);
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+
+#form_container
+{
+    padding-top: 20px;
+    display: flex;
+    justify-content: center;
+}
+
+.logon_container{
+    width: 320px;
+    height: 60px;
+    border: 1px solid gray;
+    margin-left: auto;
+    margin-right: auto;
+    border-radius: 5px;
+ }
+
+#btn_container
+{
+    padding-top: 20px;
+}
+
+#login_message
+{
+    text-align: center;
+}
+
+#logon_btn
+{
+    height: 50px;
+    width: 320px;
+    border-radius: 30px;
+    color:white;
+    background-color: dodgerblue;
+    font-weight: bold;
+    font-size: large;
+    border: 0px solid black;
+    pointer-events: none;
+}
+
+#logon_header
+{
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size:2em;
+}
+
+ #usename_table, td, tr
+ {
+    border: 0px solid yellow;
+ }
+
+ .label_row
+ {
+    visibility: collapse;
+ }
+
+.logon_input
+{
+    width: 280px;
+    height: 56px;
+    font-size: medium;
+    padding-left: 5px;
+    padding-top: 8px;
+    margin: 0px;
+    border: hidden;
+}
+
+#username_input:focus
+{
+    border: hidden;
+    outline: none;
+}
+
+#password_input:focus
+{
+    border: hidden;
+    outline: none;
+}
+
+.logon_input:focus::placeholder
+{
+    font-size: 0%;
+}
+
+.logon_table
+{
+    margin-left: auto;
+    margin-right: auto;
+    border-radius: 5%;
+}
+
+.logon_label
+{
+    color: dodgerblue;
+    visibility: hidden;
+    font-size: small;
+    font-weight: normal;
+    padding-left: 5px;
+}
