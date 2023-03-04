@@ -59,7 +59,7 @@ function LdapUserEmail($user){
     $ldapConn= ldap_connect("");
     $ldapBind = ldap_bind($ldapConn,"","");
     $attrForLdap=array("mail");
-    $ldapSearchResult=ldap_search($ldapConn,"OU=User_Accounts,DC=jaxport,dc=com","samAccountName={$user}", $attrForLdap);
+    $ldapSearchResult=ldap_search($ldapConn,"OU=generic,DC=generic,dc=com","samAccountName={$user}", $attrForLdap);
     $info = ldap_get_entries($ldapConn, $ldapSearchResult);
     if($info["count"] == 0){
         ErrorLog("Ldap search was done but nothing was returned!");
