@@ -50,8 +50,8 @@ function LDAPauth($username, $password)
     openlog($login_error_log_name, LOG_PID | LOG_PERROR, LOG_LOCAL0);
 
     //define constant variables
-    define('DOMAIN_FQDN', 'jaxport.com');
-    define('LDAP_SERVER', 'vmdc2.jaxport.com');
+    define('DOMAIN_FQDN', 'generic.com');
+    define('LDAP_SERVER', 'generic.generic.com');
     define('PROTOCOL', 'ldap');
 
     $user = strip_tags($username) .'@'. DOMAIN_FQDN; //name of user under domain
